@@ -48,6 +48,8 @@
     <string name="password">Password</string>
     <!-- The label on the "sign in" button -->
     <string name="action">Sign in</string>
+    <!-- The name of the add bookmark page activity.-->
+    <string name="bookmarks_add_page">Save bookmark</string>
     <!-- The name of the bookmarks and history search suggestion source.  -->
     <string name="bookmarks_search">Browser</string>
     <!-- Label for a cancel button.  It is used for multiple cancel buttons in different contexts -->
@@ -234,14 +236,14 @@
     <!-- Context Menu item to open the currently selected link in a new
          background window. [CHAR LIMIT=50] -->
     <string name="contextmenu_openlink_newwindow_background">Open in new background tab</string>
+    <!-- Context Menu item to save the webpage referred to by this link to the
+            SD card (external storage) -->
     <!-- Context Menu item to open the currently selected link in a new
             incognito window. -->
     <string name="contextmenu_openlink_incognito_newwindow">Open in new incognito tab</string>
     <!-- Context Menu item to open the currently selected link in a new
          background window. [CHAR LIMIT=50] -->
     <string name="contextmenu_openlink_incognito_newwindow_background">Open in new incognito background tab</string>
-    <!-- Context Menu item to save the webpage referred to by this link to the
-            SD card (external storage) -->
     <string name="contextmenu_savelink">Save link</string>
     <!-- Context Menu item to send the url of the selected link to someone else,
             via Gmail or another app [CHAR LIMIT=50] -->
@@ -286,6 +288,8 @@
     <!-- Title displayed when the bookmarks page is shown -->
     <string name="browser_bookmarks_page_bookmarks_text">Bookmarks</string>
 
+    <!-- Menu item to close the browser -->
+	<string name="menu_exit">Close browser</string>
 
     <!-- Settings screen strings -->
     <!-- Menu item to open the Settings screen -->
@@ -1001,6 +1005,8 @@
     <string name="accessibility_button_uaswitch">Switch user agent</string>
     <!-- Content description for go button [CHAR LIMIT=NONE] -->
     <string name="accessibility_button_go">Go</string>
+    <!-- Content description for home screen button [CHAR LIMIT=NONE] -->
+    <string name="accessibility_button_homescreen">Home screen</string>
 
     <!-- Content description for tab switcher button [CHAR LIMIT=NONE] -->
     <string name="accessibility_button_navscreen">Page manager</string>
@@ -1014,7 +1020,9 @@
 
     <!-- Content description for tab switcher transition [CHAR LIMIT=NONE] -->
     <string name="accessibility_transition_navscreen">Tab management</string>
-
+    <!-- Content description for navigating up in the bookmark folder hierarchy [CHAR LIMIT=NONE] -->
+    <string name="accessibility_button_bookmarks_folder_up">Previous folder</string>
+    
     <!-- Title for tab settings preference -->
     <string name="tab_settings_title">Tab settings</string>
     <!-- Dialog title -->
@@ -1038,10 +1046,9 @@
         <item>20</item>
         <item>25</item>
     </string-array>
-
     <!-- Title for Restore tabs -->
-    <!--<string name="pref_restore_tabs">Restore tabs</string>-->
+    <string name="pref_restore_tabs">Restore tabs</string>
     <!-- Summary for Restore tabs -->
-    <!--<string name="pref_restore_tabs_summary">Restore tabs on browser launch, either after killing the browser or after reboot</string>-->
+    <string name="pref_restore_tabs_summary">Restore tabs on browser launch, either after killing the browser or after reboot</string>
 
 </resources>

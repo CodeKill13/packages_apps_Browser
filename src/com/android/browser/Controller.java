@@ -36,6 +36,7 @@ import android.content.res.TypedArray;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.net.Uri;
@@ -99,6 +100,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -236,18 +238,19 @@ public class Controller
         mPageDialogsHandler = new PageDialogsHandler(mActivity, this);
 
         startHandler();
-        mBookmarksObserver = new ContentObserver(mHandler) {
-            @Override
-            public void onChange(boolean selfChange) {
-                int size = mTabControl.getTabCount();
-                for (int i = 0; i < size; i++) {
-                    mTabControl.getTab(i).updateBookmarkedStatus();
+        if (mBookmarksObserver == null) {
+            mBookmarksObserver = new ContentObserver(mHandler) {
+                @Override
+                public void onChange(boolean selfChange) {
+                    int size = mTabControl.getTabCount();
+                    for (int i = 0; i < size; i++) {
+                        mTabControl.getTab(i).updateBookmarkedStatus();
+                    }
                 }
-            }
-
-        };
-        browser.getContentResolver().registerContentObserver(
+            };
+            browser.getContentResolver().registerContentObserver(
                 BrowserContract.Bookmarks.CONTENT_URI, true, mBookmarksObserver);
+        }
 
         mNetworkHandler = new NetworkStateHandler(mActivity, this);
         // Start watching the default geolocation permissions
@@ -260,7 +263,7 @@ public class Controller
 
     @Override
     public void start(final Intent intent) {
-        WebViewClassic.setShouldMonitorWebCoreThread();
+        if (BrowserWebView.isClassic()) WebViewClassic.setShouldMonitorWebCoreThread();
         // mCrashRecoverHandler has any previously saved state.
         mCrashRecoveryHandler.startRecovery(intent);
     }
@@ -301,11 +304,11 @@ public class Controller
 
     private void onPreloginFinished(Bundle icicle, Intent intent, long currentTabId,
             boolean restoreIncognitoTabs) {
-
-        /*Context mContext = mActivity.getApplicationContext();
+				
+		/*Context mContext = mActivity.getApplicationContext();
         SharedPreferences mPrefs = PreferenceManager.getDefaultSharedPreferences(mContext);
         Boolean restoreTabs = mPrefs.getBoolean(PreferenceKeys.PREF_RESTORE_TABS, true);*/
-
+				
         if (currentTabId == -1) {
             BackgroundHandler.execute(new PruneThumbnails(mActivity, null));
             if (intent == null) {
@@ -364,7 +367,7 @@ public class Controller
         }
         // Read JavaScript flags if it exists.
         String jsFlags = getSettings().getJsEngineFlags();
-        if (jsFlags.trim().length() != 0) {
+        if (jsFlags.trim().length() != 0 && BrowserWebView.isClassic()) {
             WebViewClassic.fromWebView(getCurrentWebView()).setJsFlags(jsFlags);
         }
         if (intent != null
@@ -525,8 +528,8 @@ public class Controller
                             case R.id.save_link_context_menu_id:
                             case R.id.download_context_menu_id:
                                 DownloadHandler.onDownloadStartNoStream(
-                                        mActivity, url, null, null, null,
-                                        view.isPrivateBrowsingEnabled());
+                                        mActivity, url, view.getSettings().getUserAgentString(),
+                                        null, null, null, view.isPrivateBrowsingEnabled());
                                 break;
                         }
                         break;
@@ -765,6 +768,10 @@ public class Controller
             mUploadHandler.onResult(Activity.RESULT_CANCELED, null);
             mUploadHandler = null;
         }
+        if (sThumbnailBitmap != null) {
+            sThumbnailBitmap.recycle();
+            sThumbnailBitmap = null;
+        }
         if (mTabControl == null) return;
         mUi.onDestroy();
         // Remove the current tab and sub window
@@ -773,6 +780,7 @@ public class Controller
             dismissSubWindow(t);
             removeTab(t);
         }
+        releaseWakeLock();
         mActivity.getContentResolver().unregisterContentObserver(mBookmarksObserver);
         // Destroy all the tabs
         mTabControl.destroy();
@@ -873,11 +881,6 @@ public class Controller
     public void onPageFinished(Tab tab) {
         mCrashRecoveryHandler.backupState();
         mUi.onTabDataChanged(tab);
-        // pause the WebView timer and release the wake lock if it is finished
-        // while BrowserActivity is in pause state.
-        if (mActivityPaused && pauseWebViewTimers(tab)) {
-            releaseWakeLock();
-        }
 
         // Performance probe
         if (false) {
@@ -902,6 +905,10 @@ public class Controller
             // onPageFinished has executed)
             if (tab.inPageLoad()) {
                 updateInLoadMenuItems(mCachedMenu, tab);
+            } else if (mActivityPaused && pauseWebViewTimers(tab)) {
+                // pause the WebView timer and release the wake lock if it is
+                // finished while BrowserActivity is in pause state.
+                releaseWakeLock();
             }
             if (!tab.isPrivateBrowsingEnabled()
                     && !TextUtils.isEmpty(tab.getUrl())
@@ -1045,10 +1052,11 @@ public class Controller
 
     @Override
     public void onDownloadStart(Tab tab, String url, String userAgent,
-            String contentDisposition, String mimetype, long contentLength) {
+            String contentDisposition, String mimetype, String referer,
+            long contentLength) {
         WebView w = tab.getWebView();
         DownloadHandler.onDownloadStart(mActivity, url, userAgent,
-                contentDisposition, mimetype, w.isPrivateBrowsingEnabled());
+                contentDisposition, mimetype, referer, w.isPrivateBrowsingEnabled());
         if (w.copyBackForwardList().getSize() == 0) {
             // This Tab was opened for the sole purpose of downloading a
             // file. Remove it.
@@ -1207,7 +1215,12 @@ public class Controller
                     long id = intent.getLongExtra(
                             ComboViewActivity.EXTRA_OPEN_SNAPSHOT, -1);
                     if (id >= 0) {
-                        createNewSnapshotTab(id, true);
+                        if (BrowserWebView.isClassic()) {
+                            createNewSnapshotTab(id, true);
+                        } else {
+                            Toast.makeText(mActivity, "Snapshot Tab requires WebViewClassic",
+                                Toast.LENGTH_LONG).show();
+                        }
                     }
                 }
                 break;
@@ -1429,7 +1442,7 @@ public class Controller
                         newTabItem.setOnMenuItemClickListener(
                                 new MenuItem.OnMenuItemClickListener() {
                                     @Override
-                                    public boolean onMenuItemClick(MenuItem item) {
+                                     public boolean onMenuItemClick(MenuItem item) {
                                         final HashMap<String, WebView> hrefMap =
                                             new HashMap<String, WebView>();
                                         hrefMap.put("webview", webview);
@@ -1482,9 +1495,9 @@ public class Controller
                         return false;
                     }
                 });
-                menu.findItem(R.id.download_context_menu_id).
-                        setOnMenuItemClickListener(
-                                new Download(mActivity, extra, webview.isPrivateBrowsingEnabled()));
+                menu.findItem(R.id.download_context_menu_id).setOnMenuItemClickListener(
+                        new Download(mActivity, extra, webview.isPrivateBrowsingEnabled(),
+                                webview.getSettings().getUserAgentString()));
                 menu.findItem(R.id.set_wallpaper_context_menu_id).
                         setOnMenuItemClickListener(new WallpaperHandler(mActivity,
                                 extra));
@@ -1685,6 +1698,10 @@ public class Controller
             case R.id.preferences_menu_id:
                 openPreferences();
                 break;
+                
+            case R.id.exit_menu_id:
+	            mActivity.finish();
+	            break;
 
             case R.id.find_menu_id:
                 findOnPage();
@@ -2188,6 +2205,10 @@ public class Controller
                     }
                 } catch (IllegalStateException e) {
                     // Ignore
+                } catch (SQLiteException s) {
+                    // Added for possible error when user tries to remove the same bookmark
+                    // that is being updated with a screen shot
+                    Log.w(LOGTAG, "Error when running updateScreenshot ", s);
                 } finally {
                     if (cursor != null) cursor.close();
                 }
@@ -2214,6 +2235,7 @@ public class Controller
         private Activity mActivity;
         private String mText;
         private boolean mPrivateBrowsing;
+        private String mUserAgent;
         private static final String FALLBACK_EXTENSION = "dat";
         private static final String IMAGE_BASE_FORMAT = "yyyy-MM-dd-HH-mm-ss-";
 
@@ -2222,16 +2244,18 @@ public class Controller
             if (DataUri.isDataUri(mText)) {
                 saveDataUri();
             } else {
-                DownloadHandler.onDownloadStartNoStream(mActivity, mText, null,
-                        null, null, mPrivateBrowsing);
+                DownloadHandler.onDownloadStartNoStream(mActivity, mText, mUserAgent,
+                        null, null, null, mPrivateBrowsing);
             }
             return true;
         }
 
-        public Download(Activity activity, String toDownload, boolean privateBrowsing) {
+        public Download(Activity activity, String toDownload, boolean privateBrowsing,
+                String userAgent) {
             mActivity = activity;
             mText = toDownload;
             mPrivateBrowsing = privateBrowsing;
+            mUserAgent = userAgent;
         }
 
         /**
@@ -2270,7 +2294,7 @@ public class Controller
          */
         private File getTarget(DataUri uri) throws IOException {
             File dir = mActivity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            DateFormat format = new SimpleDateFormat(IMAGE_BASE_FORMAT);
+            DateFormat format = new SimpleDateFormat(IMAGE_BASE_FORMAT, Locale.US);
             String nameBase = format.format(new Date());
             String mimeType = uri.getMimeType();
             MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
@@ -2297,7 +2321,9 @@ public class Controller
         }
 
         public SelectText(WebView webView) {
-            mWebView = WebViewClassic.fromWebView(webView);
+          if (BrowserWebView.isClassic()) {
+              mWebView = WebViewClassic.fromWebView(webView);
+          }
         }
 
     }
@@ -2585,7 +2611,7 @@ public class Controller
         // In case the user enters nothing.
         if (url != null && url.length() != 0 && tab != null && view != null) {
             url = UrlUtils.smartUrlFilter(url);
-            if (!WebViewClassic.fromWebView(view).getWebViewClient().
+            if (!((BrowserWebView) view).getWebViewClient().
                     shouldOverrideUrlLoading(view, url)) {
                 loadUrl(tab, url);
             }
@@ -2623,6 +2649,9 @@ public class Controller
             if (data.isPreloaded()) {
                 // this isn't called for preloaded tabs
             } else {
+                if (t != null && data.mDisableUrlOverride) {
+                    t.disableUrlOverridingForLoad();
+                }
                 loadUrl(t, data.mUrl, data.mHeaders);
             }
         }
@@ -2775,14 +2804,14 @@ public class Controller
                 }
                 break;
             case KeyEvent.KEYCODE_A:
-                if (ctrl) {
+                if (ctrl && BrowserWebView.isClassic()) {
                     WebViewClassic.fromWebView(webView).selectAll();
                     return true;
                 }
                 break;
 //          case KeyEvent.KEYCODE_B:    // menu
             case KeyEvent.KEYCODE_C:
-                if (ctrl) {
+                if (ctrl && BrowserWebView.isClassic()) {
                     WebViewClassic.fromWebView(webView).copySelection();
                     return true;
                 }
@@ -2897,11 +2926,18 @@ public class Controller
 
     @Override
     public void startVoiceRecognizer() {
-        Intent voice = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        voice.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, 
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        voice.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-        mActivity.startActivityForResult(voice, VOICE_RESULT);
+        try{
+            Intent voice = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            voice.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            voice.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            mActivity.startActivityForResult(voice, VOICE_RESULT);
+        }
+        catch(android.content.ActivityNotFoundException ex)
+        {
+            //if could not find the Activity
+            Log.e(LOGTAG, "Could not start voice recognizer activity");
+        }
     }
 
     @Override

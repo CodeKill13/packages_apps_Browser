@@ -257,8 +257,10 @@ class TabControl {
             mCurrentTab = getTabPosition(current);
         }
 
+        synchronized (t) {
         // destroy the tab
-        t.destroy();
+            t.destroy();
+        }
         // clear it's references to parent and children
         t.removeFromTree();
 
@@ -571,7 +573,7 @@ class TabControl {
             }
             final WebView subview = t.getSubWebView();
             if (subview != null) {
-                webview.stopLoading();
+                subview.stopLoading();
             }
         }
     }

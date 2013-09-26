@@ -44,7 +44,7 @@ public class WallpaperHandler extends Thread
     private static final String LOGTAG = "WallpaperHandler";
     // This should be large enough for BitmapFactory to decode the header so
     // that we can mark and reset the input stream to avoid duplicate network i/o
-    private static final int BUFFER_SIZE = 131072;
+    private static final int BUFFER_SIZE = 128 * 1024;
 
     private Context mContext;
     private String  mUrl;
@@ -130,7 +130,12 @@ public class WallpaperHandler extends Thread
                 }
                 Bitmap scaledWallpaper = BitmapFactory.decodeStream(inputstream,
                         null, options);
-                wm.setBitmap(scaledWallpaper);
+                if (scaledWallpaper != null) {
+                    wm.setBitmap(scaledWallpaper);
+                } else {
+                    Log.e(LOGTAG, "Unable to set new wallpaper, " +
+                            "decodeStream returned null.");
+                }
             }
         } catch (IOException e) {
             Log.e(LOGTAG, "Unable to set new wallpaper");
