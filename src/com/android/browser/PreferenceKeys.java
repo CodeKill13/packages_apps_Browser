@@ -110,7 +110,9 @@ public interface PreferenceKeys {
     static final String PREF_MAX_TABS = "max_open_tabs";
     static final String PREF_RESTORE_TABS = "restore_tabs_on_launch";
 
+    // ----------------------
     // Keys for browser recovery
+    // ----------------------
     /**
      * The last time recovery was started as System.currentTimeMillis.
      * 0 if not set.

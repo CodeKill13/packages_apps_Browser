@@ -54,6 +54,7 @@ public class PhoneUi extends BaseUi {
     private int mActionBarHeight;
 
     boolean mAnimating;
+    boolean mShowNav = false;
 
     /**
      * @param browser
@@ -73,6 +74,7 @@ public class PhoneUi extends BaseUi {
     @Override
     public void onDestroy() {
         hideTitleBar();
+        mAnimScreen.onDestroy();
     }
 
     @Override
@@ -80,6 +82,8 @@ public class PhoneUi extends BaseUi {
         if (mUseQuickControls) {
             mTitleBar.setShowProgressOnly(false);
         }
+        //Do nothing while at Nav show screen.
+        if (mShowNav) return;
         super.editUrl(clearInput, forceIME);
     }
 
@@ -131,6 +135,12 @@ public class PhoneUi extends BaseUi {
         mTitleBar.cancelTitleBarAnimation(true);
         mTitleBar.setSkipTitleBarAnimations(true);
         super.setActiveTab(tab);
+
+        //if at Nav screen show, detach tab like what showNavScreen() do.
+        if (mShowNav) {
+            detachTab(mActiveTab);
+        }
+
         BrowserWebView view = (BrowserWebView) tab.getWebView();
         // TabControl.setCurrentTab has been called before this,
         // so the tab is guaranteed to have a webview
@@ -254,6 +264,7 @@ public class PhoneUi extends BaseUi {
     }
 
     void showNavScreen() {
+        mShowNav = true;
         mUiController.setBlockEvents(true);
         if (mNavScreen == null) {
             mNavScreen = new NavScreen(mActivity, mUiController, this);
@@ -334,6 +345,7 @@ public class PhoneUi extends BaseUi {
     }
 
     void hideNavScreen(int position, boolean animate) {
+        mShowNav = false;
         if (!showingNavScreen()) return;
         final Tab tab = mUiController.getTabControl().getTab(position);
         if ((tab == null) || !animate) {
@@ -501,6 +513,17 @@ public class PhoneUi extends BaseUi {
                 c.setBitmap(null);
             }
             mContent.setImageBitmap(mContentBitmap);
+        }
+
+        public void onDestroy() {
+            if (mContentBitmap != null) {
+                mContentBitmap.recycle();
+                mContentBitmap = null;
+            }
+            if (mTitleBarBitmap != null) {
+                mTitleBarBitmap.recycle();
+                mTitleBarBitmap = null;
+            }
         }
 
         private Bitmap safeCreateBitmap(int width, int height) {

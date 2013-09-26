@@ -46,9 +46,9 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewStub;
+import android.webkit.BrowserDownloadListener;
 import android.webkit.ClientCertRequestHandler;
 import android.webkit.ConsoleMessage;
-import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
 import android.webkit.HttpAuthHandler;
 import android.webkit.SslErrorHandler;
@@ -64,6 +64,7 @@ import android.webkit.WebView;
 import android.webkit.WebView.PictureListener;
 import android.webkit.WebViewClassic;
 import android.webkit.WebViewClient;
+import android.webkit.WebViewClientClassicExt;
 import android.widget.CheckBox;
 import android.widget.Toast;
 
@@ -155,6 +156,7 @@ class Tab implements PictureListener {
     // If true, the tab is in page loading state (after onPageStarted,
     // before onPageFinsihed)
     private boolean mInPageLoad;
+    private boolean mDisableOverrideUrlLoading;
     // The last reported progress of the current page
     private int mPageLoadProgress;
     // The time the load started, used to find load page time
@@ -170,7 +172,7 @@ class Tab implements PictureListener {
     private ErrorConsoleView mErrorConsole;
     // The listener that gets invoked when a download is started from the
     // mMainView
-    private final DownloadListener mDownloadListener;
+    private final BrowserDownloadListener mDownloadListener;
     // Listener used to know when we move forward or back in the history list.
     private final WebBackForwardListClient mWebBackForwardListClient;
     private DataController mDataController;
@@ -322,7 +324,7 @@ class Tab implements PictureListener {
     // WebViewClient implementation for the main WebView
     // -------------------------------------------------------------------------
 
-    private final WebViewClient mWebViewClient = new WebViewClient() {
+    private final WebViewClientClassicExt mWebViewClient = new WebViewClientClassicExt() {
         private Message mDontResend;
         private Message mResend;
 
@@ -372,6 +374,7 @@ class Tab implements PictureListener {
 
         @Override
         public void onPageFinished(WebView view, String url) {
+            mDisableOverrideUrlLoading = false;
             if (!isPrivateBrowsingEnabled()) {
                 LogTag.logPageFinishedLoading(
                         url, SystemClock.uptimeMillis() - mLoadStartTime);
@@ -383,7 +386,7 @@ class Tab implements PictureListener {
         // return true if want to hijack the url to let another app to handle it
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            if (mInForeground) {
+            if (!mDisableOverrideUrlLoading && mInForeground) {
                 return mWebViewController.shouldOverrideUrlLoading(Tab.this,
                         view, url);
             } else {
@@ -515,7 +518,7 @@ class Tab implements PictureListener {
                 new AlertDialog.Builder(mContext)
                     .setTitle(R.string.security_warning)
                     .setMessage(R.string.ssl_warnings_header)
-                    .setIcon(android.R.drawable.ic_dialog_alert)
+                    .setIconAttribute(android.R.attr.alertDialogIcon)
                     .setPositiveButton(R.string.ssl_continue,
                         new DialogInterface.OnClickListener() {
                             @Override
@@ -716,7 +719,7 @@ class Tab implements PictureListener {
             if (dialog && mSubView != null) {
                 new AlertDialog.Builder(mContext)
                         .setTitle(R.string.too_many_subwindows_dialog_title)
-                        .setIcon(android.R.drawable.ic_dialog_alert)
+                        .setIconAttribute(android.R.attr.alertDialogIcon)
                         .setMessage(R.string.too_many_subwindows_dialog_message)
                         .setPositiveButton(R.string.ok, null)
                         .show();
@@ -724,7 +727,7 @@ class Tab implements PictureListener {
             } else if (!mWebViewController.getTabControl().canCreateNewTab()) {
                 new AlertDialog.Builder(mContext)
                         .setTitle(R.string.too_many_windows_dialog_title)
-                        .setIcon(android.R.drawable.ic_dialog_alert)
+                        .setIconAttribute(android.R.attr.alertDialogIcon)
                         .setMessage(R.string.too_many_windows_dialog_message)
                         .setPositiveButton(R.string.ok, null)
                         .show();
@@ -757,7 +760,7 @@ class Tab implements PictureListener {
             // Build a confirmation dialog to display to the user.
             final AlertDialog d =
                     new AlertDialog.Builder(mContext)
-                    .setIcon(android.R.drawable.ic_dialog_alert)
+                    .setIconAttribute(android.R.attr.alertDialogIcon)
                     .setMessage(R.string.popup_window_attempt)
                     .setPositiveButton(R.string.allow, allowListener)
                     .setNegativeButton(R.string.block, blockListener)
@@ -934,9 +937,10 @@ class Tab implements PictureListener {
             }
 
             // Don't log console messages in private browsing mode
-            if (isPrivateBrowsingEnabled()) return true;
+            //if (isPrivateBrowsingEnabled()) return true;
 
-            String message = "Console: " + consoleMessage.message() + " "
+            //IF WE CARED, WE'D OPEN UP THE ERROR CONSOLE. STFU IN LOGCAT!
+            /*String message = "Console: " + consoleMessage.message() + " "
                     + consoleMessage.sourceId() +  ":"
                     + consoleMessage.lineNumber();
 
@@ -956,7 +960,7 @@ class Tab implements PictureListener {
                 case DEBUG:
                     Log.d(CONSOLE_LOGTAG, message);
                     break;
-            }
+            }*/
 
             return true;
         }
@@ -1045,12 +1049,12 @@ class Tab implements PictureListener {
 
     // Subclass of WebViewClient used in subwindows to notify the main
     // WebViewClient of certain WebView activities.
-    private static class SubWindowClient extends WebViewClient {
+    private static class SubWindowClient extends WebViewClientClassicExt {
         // The main WebViewClient.
-        private final WebViewClient mClient;
+        private final WebViewClientClassicExt mClient;
         private final WebViewController mController;
 
-        SubWindowClient(WebViewClient client, WebViewController controller) {
+        SubWindowClient(WebViewClientClassicExt client, WebViewController controller) {
             mClient = client;
             mController = controller;
         }
@@ -1123,6 +1127,19 @@ class Tab implements PictureListener {
             mClient.onProgressChanged(view, newProgress);
         }
         @Override
+        public void onShowCustomView(View view, CustomViewCallback callback) {
+            mClient.onShowCustomView(view, callback);
+        }
+        @Override
+        public void onShowCustomView(View view, int requestedOrientation,
+            CustomViewCallback callback) {
+            mClient.onShowCustomView(view, requestedOrientation, callback);
+        }
+        @Override
+        public void onHideCustomView() {
+            mClient.onHideCustomView();
+        }
+        @Override
         public boolean onCreateWindow(WebView view, boolean dialog,
                 boolean userGesture, android.os.Message resultMsg) {
             return mClient.onCreateWindow(view, dialog, userGesture, resultMsg);
@@ -1133,6 +1150,10 @@ class Tab implements PictureListener {
                 Log.e(LOGTAG, "Can't close the window");
             }
             mWebViewController.dismissSubWindow(Tab.this);
+        }
+        @Override
+        public View getVideoLoadingProgressView() {
+            return mClient.getVideoLoadingProgressView();
         }
     }
 
@@ -1157,12 +1178,12 @@ class Tab implements PictureListener {
         mInPageLoad = false;
         mInForeground = false;
 
-        mDownloadListener = new DownloadListener() {
+        mDownloadListener = new BrowserDownloadListener() {
             public void onDownloadStart(String url, String userAgent,
-                    String contentDisposition, String mimetype,
+                    String contentDisposition, String mimetype, String referer,
                     long contentLength) {
                 mWebViewController.onDownloadStart(Tab.this, url, userAgent, contentDisposition,
-                        mimetype, contentLength);
+                        mimetype, referer, contentLength);
             }
         };
         mWebBackForwardListClient = new WebBackForwardListClient() {
@@ -1290,7 +1311,9 @@ class Tab implements PictureListener {
             // does a redirect after a period of time. The user could have
             // switched to another tab while waiting for the download to start.
             mMainView.setDownloadListener(mDownloadListener);
-            getWebViewClassic().setWebBackForwardListClient(mWebBackForwardListClient);
+            if (BrowserWebView.isClassic()) {
+                getWebViewClassic().setWebBackForwardListClient(mWebBackForwardListClient);
+            }
             TabControl tc = mWebViewController.getTabControl();
             if (tc != null && tc.getOnThumbnailUpdatedListener() != null) {
                 mMainView.setPictureListener(this);
@@ -1312,7 +1335,18 @@ class Tab implements PictureListener {
      * Destroy the tab's main WebView and subWindow if any
      */
     void destroy() {
+        if (mCapture != null)
+        {
+            mCapture.recycle();
+            mCapture = null;
+        }
         if (mMainView != null) {
+            if (mSubView != null)
+            {
+                //remove the Subwindow container first.
+                Controller mController = (Controller)mWebViewController;
+                mController.removeSubWindow(this);
+            }
             dismissSubWindow();
             // save the WebView to call destroy() after detach it from the tab
             WebView webView = mMainView;
@@ -1351,12 +1385,12 @@ class Tab implements PictureListener {
                     mWebChromeClient));
             // Set a different DownloadListener for the mSubView, since it will
             // just need to dismiss the mSubView, rather than close the Tab
-            mSubView.setDownloadListener(new DownloadListener() {
+            mSubView.setDownloadListener(new BrowserDownloadListener() {
                 public void onDownloadStart(String url, String userAgent,
-                        String contentDisposition, String mimetype,
+                        String contentDisposition, String mimetype, String referer,
                         long contentLength) {
                     mWebViewController.onDownloadStart(Tab.this, url, userAgent,
-                            contentDisposition, mimetype, contentLength);
+                            contentDisposition, mimetype, referer, contentLength);
                     if (mSubView.copyBackForwardList().getSize() == 0) {
                         // This subwindow was opened for the sole purpose of
                         // downloading a file. Remove it.
@@ -1532,6 +1566,9 @@ class Tab implements PictureListener {
      * @return The main WebView of this tab.
      */
     WebViewClassic getWebViewClassic() {
+        if (!BrowserWebView.isClassic()) {
+            return null;
+        }
         return WebViewClassic.fromWebView(mMainView);
     }
 
@@ -1892,6 +1929,10 @@ class Tab implements PictureListener {
             mWebViewController.onPageStarted(this, mMainView, null);
             mMainView.loadUrl(url, headers);
         }
+    }
+
+    public void disableUrlOverridingForLoad() {
+        mDisableOverrideUrlLoading = true;
     }
 
     protected void capture() {
